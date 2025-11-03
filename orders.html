@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>عشارك — الطلبات</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px}
+.table{background:#fff;padding:12px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.06)}
+th,td{text-align:center;padding:8px;border-bottom:1px solid #f4f1f3}
+.filter-row{display:flex;gap:8px;align-items:center}
+.badge{background:#f8bbd0;color:#800; padding:4px 8px;border-radius:8px;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="header">🧾 إدارة الطلبات — عشارك</div>
+  <div class="container">
+    <div class="controls">
+      <div class="filter-row">
+        <select id="storeFilter"><option value="all">كل المتاجر</option></select>
+        <select id="statusFilter"><option value="all">كل الحالات</option><option value="new">جديدة</option><option value="ready">جاهزة</option><option value="completed">مكتملة</option></select>
+        <input id="searchBox" class="search" placeholder="ابحث بالاسم أو الهاتف" oninput="renderOrders()">
+      </div>
+      <div>
+        <button class="btn" onclick="window.print()">🖨️ طباعة</button>
+        <button class="btn ghost" onclick="clearOrdersConfirm()">🗑️ حذف الكل</button>
+      </div>
+    </div>
+
+    <div id="ordersTable" class="table">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th>الاسم</th><th>الهاتف</th><th>المتجر</th><th>المنتج/التفاصيل</th><th>السعر</th><th>الوقت</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+function load(k, fallback){ try{ return JSON.parse(localStorage.getItem(k)) || fallback }catch(e){ return fallback } }
+function save(k,v){ localStorage.setItem(k, JSON.stringify(v)) }
+let stores = load('stores', []);
+let orders = load('orders', []);
+const storeFilter = document.getElementById('storeFilter');
+const statusFilter = document.getElementById('statusFilter');
+
+function fillStoreFilter(){
+  storeFilter.innerHTML = '<option value="all">كل المتاجر</option>';
+  stores.forEach(s=> storeFilter.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+}
+function renderOrders(){
+  orders = load('orders', []);
+  const tbody = document.getElementById('ordersBody');
+  tbody.innerHTML = '';
+  const sFilter = storeFilter.value;
+  const stFilter = statusFilter.value;
+  const q = (document.getElementById('searchBox').value||'').toLowerCase();
+  const filtered = orders.filter(o=>{
+    if(sFilter !== 'all' && o.storeId !== sFilter) return false;
+    if(stFilter !== 'all' && o.status !== stFilter) return false;
+    if(q){
+      return (o.customerName||'').toLowerCase().includes(q) || (o.customerPhone||'').includes(q) || (o.productName||'').toLowerCase().includes(q);
+    }
+    return true;
+  });
+  if(!filtered.length){ tbody.innerHTML = '<tr><td colspan="8" class="small-muted">لا توجد طلبات مطابقة</td></tr>'; return; }
+  filtered.forEach(o=>{
+    const store = stores.find(s=>s.id===o.storeId);
+    tbody.innerHTML += `<tr>
+      <td>${o.customerName}</td>
+      <td>${o.customerPhone}</td>
+      <td>${store?store.name:'-'}</td>
+      <td>${o.productName || `${o.count} × تخصيص`}</td>
+      <td>${o.totalPrice}</td>
+      <td>${o.time}</td>
+      <td>${o.status}</td>
+      <td>
+        <button class="btn ghost" onclick="changeStatus('${o.id}','ready')">✔ جاهز</button>
+        <button class="btn ghost" onclick="changeStatus('${o.id}','completed')">✅ مكتمل</button>
+        <button class="btn ghost" onclick="deleteOrder('${o.id}')">حذف</button>
+      </td>
+    </tr>`;
+  });
+}
+
+function changeStatus(id, status){
+  orders = load('orders', []);
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  o.status = status;
+  save('orders', orders);
+  renderOrders();
+}
+function deleteOrder(id){
+  if(!confirm('حذف هذا الطلب؟')) return;
+  orders = load('orders', []).filter(x=>x.id!==id); save('orders', orders); renderOrders();
+}
+function clearOrdersConfirm(){
+  if(!confirm('حذف كل الطلبات؟')) return;
+  localStorage.removeItem('orders'); orders = []; renderOrders();
+}
+
+/* init */
+fillStoreFilter();
+renderOrders();
+storeFilter.addEventListener('change', renderOrders);
+statusFilter.addEventListener('change', renderOrders);
+</script>
+</body>
+</html>
