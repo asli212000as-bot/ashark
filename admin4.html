@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>عشارك — لوحة الأدمن</title>
+<style>
+:root{--accent:#e91e63;--bg:#fffafc}
+body{font-family:tahoma;background:var(--bg);margin:0;color:#222}
+.header{background:linear-gradient(90deg,var(--accent),#9c27b0);color:#fff;padding:16px;text-align:center;font-weight:700}
+.container{max-width:1100px;margin:18px auto;padding:12px}
+.grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
+.panel{background:#fff;padding:12px;border-radius:12px;box-shadow:0 8px 26px rgba(0,0,0,0.06)}
+input,textarea,select{width:100%;padding:8px;border-radius:8px;border:1px solid #eee;margin-top:8px}
+.btn{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--accent);border:2px solid var(--accent)}
+.store-list{max-height:420px;overflow:auto;margin-top:8px}
+.row{display:flex;gap:8px;align-items:center}
+.small{font-size:13px;color:#666}
+</style>
+</head>
+<body>
+  <div class="header">عشارك — لوحة التحكم</div>
+  <div class="container">
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+      <div><button class="btn" onclick="openPublic()">عرض الموقع</button></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn ghost" onclick="exportData()">⬇️ تصدير بيانات</button>
+        <button class="btn ghost" onclick="importJson()">⬆️ إستيراد بيانات</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none" onchange="handleImport(event)">
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- اليسار: إضافة متجر ومنتجات -->
+      <div class="panel">
+        <h3>إضافة متجر جديد</h3>
+        <input id="sName" placeholder="اسم المتجر (مثال: متجر الورود)"/>
+        <input id="sOwner" placeholder="اسم المالك"/>
+        <input id="sPhone" placeholder="رقم الهاتف"/>
+        <input id="sCategory" placeholder="التصنيف (ورد / كرزات ...)"/>
+        <input id="sImage" placeholder="رابط صورة المتجر (اختياري)"/>
+        <textarea id="sDesc" placeholder="نبذة عن المتجر (اختياري)"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn" onclick="createStore()">➕ إضافة متجر</button>
+          <button class="btn ghost" onclick="clearStoreForm()">مسح الحقول</button>
+        </div>
+
+        <hr style="margin:12px 0"/>
+
+        <h3>إضافة منتج للمتجر المحدد</h3>
+        <div class="small">اختر متجر من القائمة اليمنى أولاً</div>
+        <select id="selectStore" style="margin-top:8px"></select>
+        <input id="pName" placeholder="اسم المنتج"/>
+        <input id="pPrice" placeholder="السعر لكل كيلو/قطعة (د.ع)"/>
+        <input id="pImage" placeholder="رابط صورة المنتج (اختياري)"/>
+        <label style="display:block;margin-top:8px"><input type="checkbox" id="pNeedScale"/> يحتاج ميزان</label>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn" onclick="addProduct()">➕ إضافة المنتج</button>
+          <button class="btn ghost" onclick="clearProductForm()">مسح</button>
+        </div>
+
+        <div style="margin-top:14px">
+          <h4>المنتجات في المتجر المحدد</h4>
+          <div id="storeProducts" class="store-products small"></div>
+        </div>
+      </div>
+
+      <!-- اليمين: قائمة المتاجر والأدوات -->
+      <div class="panel">
+        <h3>قائمة المتاجر</h3>
+        <input id="filter" placeholder="فلتر بالاسم أو المالك" oninput="renderStores()"/>
+        <div id="storesList" class="store-list"></div>
+
+        <hr style="margin:12px 0"/>
+        <div class="small">أدوات سريعة</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn ghost" onclick="seedDemo()">⚡ بيانات توضيحية</button>
+          <button class="btn ghost" onclick="clearAll()">🗑️ حذف كل البيانات</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* helpers */
+function uid(p='id'){return p+'_'+Date.now()+'_'+Math.floor(Math.random()*900+100)}
+function load(k,d){try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}}
+function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function openPublic(){window.location.href='index.html'}
+
+/* initial */
+let stores = load('stores',[]);
+renderStoresList();
+populateStoreSelect();
+
+/* store functions */
+function createStore(){
+  const name=document.getElementById('sName').value.trim();
+  if(!name){ alert('أدخل اسم المتجر'); return; }
+  const st = { id: uid('s'), name, owner: document.getElementById('sOwner').value.trim(), phone: document.getElementById('sPhone').value.trim(), category: document.getElementById('sCategory').value.trim() || 'عام', image: document.getElementById('sImage').value.trim(), description: document.getElementById('sDesc').value.trim(), products:[] };
+  stores.push(st); save('stores',stores); renderStoresList(); populateStoreSelect(); clearStoreForm(); alert('تم إنشاء المتجر');
+}
+function clearStoreForm(){ ['sName','sOwner','sPhone','sCategory','sImage','sDesc'].forEach(id=>document.getElementById(id).value='') }
+
+/* render list */
+function renderStoresList(){
+  stores = load('stores',[]);
+  const filter = (document.getElementById('filter').value||'').toLowerCase();
+  const list = document.getElementById('storesList'); list.innerHTML='';
+  if(!stores.length){ list.innerHTML='<div class="small">لا توجد متاجر بعد</div>'; return; }
+  stores.filter(s=> !filter || s.name.toLowerCase().includes(filter) || (s.owner||'').toLowerCase().includes(filter)).forEach(s=>{
+    const div = document.createElement('div'); div.style.padding='8px'; div.style.borderBottom='1px solid #f4e9f2';
+    div.innerHTML = `<strong>${s.name}</strong><div class="small">${s.owner||''} • ${s.category||''}</div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="btn" onclick="selectStore('${s.id}')">فتح</button>
+        <button class="btn ghost" onclick="editStore('${s.id}')">تعديل</button>
+        <button class="btn ghost" onclick="deleteStore('${s.id}')">حذف</button>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+/* select store */
+let selectedStoreId = null;
+function selectStore(id){
+  selectedStoreId = id;
+  populateStoreSelect();
+  showStoreProducts();
+  document.getElementById('selectStore').value = id;
+}
+
+/* populate select dropdown */
+function populateStoreSelect(){
+  const sel = document.getElementById('selectStore'); sel.innerHTML = '<option value="">اختر متجر</option>';
+  stores.forEach(s=> sel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+}
+
+/* add product */
+function addProduct(){
+  const sid = document.getElementById('selectStore').value || selectedStoreId;
+  if(!sid){ alert('اختر متجرًا أولاً'); return; }
+  const name = document.getElementById('pName').value.trim();
+  const price = parseFloat(document.getElementById('pPrice').value);
+  if(!name || !price){ alert('أدخل اسم المنتج والسعر'); return; }
+  const img = document.getElementById('pImage').value.trim() || '';
+  const needScale = document.getElementById('pNeedScale').checked;
+  const st = stores.find(x=>x.id===sid);
+  st.products.push({ id: uid('p'), name, price, image: img, needScale });
+  save('stores', stores);
+  clearProductForm();
+  showStoreProducts();
+  alert('تم إضافة المنتج');
+}
+
+/* show products of selected store */
+function showStoreProducts(){
+  const sid = document.getElementById('selectStore').value || selectedStoreId;
+  const box = document.getElementById('storeProducts'); box.innerHTML='';
+  if(!sid){ box.innerHTML='<div class="small">اختر متجرًا لعرض منتجاته</div>'; return; }
+  const st = stores.find(x=>x.id===sid);
+  if(!st || !st.products.length){ box.innerHTML='<div class="small">لا توجد منتجات بعد</div>'; return; }
+  st.products.forEach(p=>{
+    const d = document.createElement('div'); d.className='product'; d.innerHTML = `<strong>${p.name}</strong> - ${p.price.toLocaleString()} د.ع ${p.needScale? '⚖️':''} <div style="margin-top:6px"><button class="btn ghost" onclick="removeProduct('${st.id}','${p.id}')">حذف</button></div>`;
+    box.appendChild(d);
+  });
+}
+
+function clearProductForm(){ ['pName','pPrice','pImage'].forEach(id=>document.getElementById(id).value=''); document.getElementById('pNeedScale').checked=false }
+
+/* edit/delete */
+function editStore(id){
+  const st = stores.find(x=>x.id===id);
+  if(!st) return;
+  document.getElementById('sName').value = st.name; document.getElementById('sOwner').value = st.owner; document.getElementById('sPhone').value = st.phone; document.getElementById('sCategory').value = st.category; document.getElementById('sImage').value = st.image; document.getElementById('sDesc').value = st.description;
+  // remove old (simple edit flow)
+  stores = stores.filter(x=>x.id!==id); save('stores',stores); renderStoresList();
+}
+
+function deleteStore(id){
+  if(!confirm('حذف المتجر نهائياً؟')) return;
+  stores = stores.filter(x=>x.id!==id); save('stores',stores); renderStoresList(); populateStoreSelect(); selectedStoreId=null; document.getElementById('storeProducts').innerHTML='';
+}
+
+function removeProduct(storeId, prodId){
+  const st = stores.find(x=>x.id===storeId);
+  st.products = st.products.filter(p=>p.id!==prodId);
+  save('stores',stores); showStoreProducts();
+}
+
+/* export/import */
+function exportData(){
+  const data = {stores};
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='ashark-data.json'; a.click(); URL.revokeObjectURL(url);
+}
+function importJson(){ document.getElementById('importFile').click() }
+function handleImport(e){
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader(); r.onload = ()=> {
+    try{
+      const data = JSON.parse(r.result);
+      if(Array.isArray(data.stores)) { stores = data.stores; save('stores',stores); renderStoresList(); populateStoreSelect(); alert('تم الاستيراد'); }
+    }catch(err){ alert('ملف غير صالح') }
+  }; r.readAsText(f);
+}
+
+/* seed, clear */
+function seedDemo(){
+  if(!confirm('إضافة أمثلة؟')) return;
+  const demo = [
+    { id: uid('s'), name:'متجر الكرزات', owner:'أحمد', phone:'0770000000', category:'كرزات', description:'كرزات طازجة', image:'https://cdn.pixabay.com/photo/2016/11/18/16/39/cherries-1835786_1280.jpg', products:[
+      {id:uid('p'), name:'كرزات مشكلة', price:10000, image:'https://cdn.pixabay.com/photo/2016/11/18/16/39/cherries-1835786_1280.jpg', needScale:true}
+    ]}
+  ];
+  stores = stores.concat(demo); save('stores',stores); renderStoresList(); populateStoreSelect();
+}
+function clearAll(){ if(!confirm('حذف كل البيانات؟')) return; localStorage.removeItem('stores'); localStorage.removeItem('cart'); localStorage.removeItem('orders'); stores=[]; renderStoresList(); populateStoreSelect(); alert('تم الحذف') }
+
+/* init */
+renderStoresList();
+populateStoreSelect();
+showStoreProducts();
+</script>
+</body>
+</html>

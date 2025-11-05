@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>عشارك — متجر</title>
+<style>
+:root{--accent:#e91e63;--bg:#fffafc}
+body{font-family:tahoma;background:var(--bg);margin:0;color:#222}
+.header{background:linear-gradient(90deg,var(--accent),#9c27b0);color:#fff;padding:16px;text-align:center;font-weight:700}
+.container{max-width:1100px;margin:18px auto;padding:12px}
+.top{display:flex;gap:12px;align-items:center;background:#fff;padding:12px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.06)}
+.top img{width:160px;height:110px;object-fit:cover;border-radius:10px}
+.products{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px}
+.card{background:#fff;padding:12px;border-radius:12px;box-shadow:0 8px 26px rgba(0,0,0,0.06);text-align:center;position:relative}
+.card img.prod{width:100%;height:160px;object-fit:cover;border-radius:8px}
+.dial{width:140px;height:140px;border-radius:50%;border:6px solid #eee;margin:12px auto;position:relative;background:radial-gradient(circle at center,#fff,#faf0f4)}
+.numbers span{position:absolute;font-weight:700;color:#444;font-size:13px}
+.needle{position:absolute;width:3px;height:64px;background:#333;left:50%;top:18px;transform-origin:50% 100%;transform:rotate(-45deg);transition:transform .4s}
+.center-dot{position:absolute;width:12px;height:12px;background:#222;border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%)}
+.onScale{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);width:64px;height:64px;object-fit:contain;transition:transform .35s}
+select{padding:8px;border-radius:8px;border:1px solid #eee}
+.btn{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+.cart-btn{position:fixed;left:16px;top:16px;background:var(--accent);color:#fff;padding:10px 14px;border-radius:999px;z-index:999;cursor:pointer}
+</style>
+</head>
+<body>
+  <div class="header">🌸 متجر عشارك</div>
+  <div class="cart-btn" id="cartBtn">🛒 السلة</div>
+  <div class="container" id="main"></div>
+
+<script>
+/* helpers */
+function load(k,d){try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}}
+function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function uid(p='id'){return p+'_'+Date.now()+'_'+Math.floor(Math.random()*900+100)}
+
+/* load selected store */
+let stores = load('stores',[]);
+let sid = localStorage.getItem('selectedStoreId') || (stores[0] && stores[0].id);
+let store = stores.find(s=>s.id===sid);
+if(!store){ document.getElementById('main').innerHTML = '<p>لم يتم اختيار متجر أو لا توجد بيانات. افتح لوحة الأدمن وأضف متجرًا.</p>'; throw ''}
+
+/* render header */
+const main = document.getElementById('main');
+main.innerHTML = `
+  <div class="top">
+    <img src="${store.image||'https://cdn.pixabay.com/photo/2016/02/19/11/19/roses-1209504_1280.jpg'}" alt="${store.name}">
+    <div>
+      <h2 style="margin:0;color:var(--accent)">${store.name}</h2>
+      <div style="color:#666">${store.description||''}</div>
+      <div style="margin-top:8px"><strong>المالك:</strong> ${store.owner||'-'} • <strong>📞</strong> ${store.phone||'-'}</div>
+    </div>
+  </div>
+  <div class="products" id="productsGrid"></div>
+`;
+
+/* render products */
+const grid = document.getElementById('productsGrid');
+if(!store.products || !store.products.length){ grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#666">لا توجد منتجات في هذا المتجر</div>' }
+else{
+  store.products.forEach((p, i)=>{
+    const card = document.createElement('div'); card.className='card';
+    card.innerHTML = `
+      <img class="prod" src="${p.image||'https://cdn.pixabay.com/photo/2016/11/29/03/53/roses-1867774_1280.jpg'}" alt="${p.name}">
+      <h3 style="margin:8px 0">${p.name}</h3>
+      <div style="color:var(--accent);font-weight:800">${Number(p.price).toLocaleString()} د.ع</div>
+      ${p.needScale ? `
+        <div class="dial" id="dial${p.id}">
+          <div class="numbers">
+            <span style="transform:rotate(-40deg) translate(48px,-6px)">0.25</span>
+            <span style="transform:rotate(-10deg) translate(62px,-4px)">0.5</span>
+            <span style="transform:rotate(20deg) translate(56px,0px)">0.75</span>
+            <span style="transform:rotate(50deg) translate(46px,6px)">1</span>
+          </div>
+          <div class="needle" id="needle${p.id}"></div>
+          <img class="onScale" id="imgOnScale${p.id}" src="${p.image||''}" alt="">
+          <div class="center-dot"></div>
+        </div>
+        <div style="margin:6px 0">
+          <select id="sel${p.id}">
+            <option value="">اختر الوزن</option>
+            <option value="0.25">ربع كيلو</option>
+            <option value="0.5">نصف كيلو</option>
+            <option value="0.75">ثلاثة أرباع</option>
+            <option value="1">كيلو كامل</option>
+          </select>
+        </div>
+      ` : ''}
+      <div style="margin-top:8px"><button class="btn" id="btn${p.id}">أضف للسلة 🛒</button></div>
+    `;
+    grid.appendChild(card);
+
+    /* if needScale => setup handlers */
+    if(p.needScale){
+      const sel = document.getElementById('sel'+p.id);
+      const needle = document.getElementById('needle'+p.id);
+      const imgOn = document.getElementById('imgOnScale'+p.id);
+      // init
+      needle.style.transform = 'rotate(-45deg)';
+      sel && sel.addEventListener('change', ()=> {
+        const w = parseFloat(sel.value||0);
+        const ang = -45 + (w*90); // map 0->-45 ,1->45
+        needle.style.transform = `rotate(${ang}deg)`;
+        if(imgOn) imgOn.style.transform = `translateY(-${w*8}px) scale(${1+ w*0.08})`;
+        // optional sound:
+        if(window.AudioContext) try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.type='sine'; o.frequency.value=700; g.gain.value=0.02; o.start(); setTimeout(()=>o.stop(),80);}catch(e){}
+      });
+    }
+
+    /* add to cart handler */
+    document.getElementById('btn'+p.id).addEventListener('click', (ev)=>{
+      let weight = 1;
+      if(p.needScale){
+        const sel = document.getElementById('sel'+p.id);
+        if(!sel.value){ alert('اختر الوزن أولاً'); return; }
+        weight = parseFloat(sel.value);
+      }
+      const price = Math.round(Number(p.price) * weight);
+      // animate fly
+      flyToCart(ev.target, weight);
+      // push to cart
+      const cart = load('cart',[]);
+      cart.push({ id: uid('c'), storeId: store.id, productId: p.id, name: p.name, weight, price, storeName: store.name });
+      save('cart', cart);
+      setTimeout(()=> alert(`✅ أضيف ${weight} كغ من ${p.name} — ${price.toLocaleString()} د.ع إلى السلة`),900);
+    });
+  });
+}
+
+/* fly animation */
+function flyToCart(btn, weight){
+  const rect = btn.getBoundingClientRect();
+  const cart = document.getElementById('cartBtn').getBoundingClientRect();
+  const fly = document.createElement('div');
+  fly.style.position='absolute';
+  const size = 26 + weight*36;
+  fly.style.width = size+'px'; fly.style.height = size+'px';
+  fly.style.left = (rect.left + rect.width/2 - size/2) + 'px';
+  fly.style.top = (rect.top + rect.height/2 - size/2) + 'px';
+  fly.style.background = 'radial-gradient(circle at 35% 30%, #fff6, #f06292)';
+  fly.style.borderRadius = '50%';
+  fly.style.zIndex = 9999; fly.style.transition='all 0.9s cubic-bezier(.2,.9,.3,1)';
+  document.body.appendChild(fly);
+  setTimeout(()=> {
+    fly.style.left = (cart.left + cart.width/2 - size/2) + 'px';
+    fly.style.top = (cart.top + cart.height/2 - size/2) + 'px';
+    fly.style.transform = 'scale(0.4)';
+    fly.style.opacity = '0.6';
+  },30);
+  setTimeout(()=> fly.remove(),920);
+}
+
+/* cart button */
+document.getElementById('cartBtn').addEventListener('click', ()=>{
+  const cart = load('cart',[]);
+  if(!cart.length){ alert('السلة فارغة'); return; }
+  window.location.href = 'cart.html';
+});
+</script>
+</body>
+</html>
